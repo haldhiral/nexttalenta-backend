@@ -1,27 +1,42 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 	"net/http"
 
-	"backend-app/config"
-	"backend-app/internal/handler"
-	"backend-app/internal/repository"
-	"backend-app/internal/usecase"
-	"backend-app/pkg/database"
-	"backend-app/routes"
+	"nexttalenta-backend/database"
+	"nexttalenta-backend/services"
+	loginhttp "nexttalenta-backend/transport/http"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 func main() {
-	config.LoadEnv()
-
-
-	db := database.ConnectMySQL()
+	// Initialize database connection
+	dsn := "root@tcp(localhost:3306)/nexttalenta"
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
 	defer db.Close()
 
-	r := routes.NewRouter(userHandler)
+	// Check database connection
+	if err := db.Ping(); err != nil {
+		log.Fatalf("Database is unreachable: %v", err)
+	}
 
-	
+	log.Println("Database connected successfully.")
+
+	// ✅ Initialize repository and use case correctly
+	userRepo := database.NewUserRepository(db)
+	loginService := services.NewLoginService(userRepo)
+	loginHandler := loginhttp.NewLoginHandler(loginService) // ✅ Updated
+
+	// Set up HTTP routes
+	http.HandleFunc("/login", loginHandler.Login)
+
+	// Start server
 	log.Println("Server running on port 8080")
-	log.Fatal(http.ListenAndServe(":8080", r))
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
